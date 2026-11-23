@@ -138,7 +138,14 @@ def _display_name(path, root):
     return str(path)
 
 
-def _nvim_entry(config, root, paths, elapsed):
+def _with_summary(summary, details):
+    if summary:
+        return f"{summary} ({details})"
+
+    return details
+
+
+def _nvim_entry(config, root, paths, elapsed, summary):
     names = sorted({_display_name(path, root) for path in paths})
     shown = ", ".join(names[:NVIM_FILES_SHOWN])
 
@@ -148,27 +155,43 @@ def _nvim_entry(config, root, paths, elapsed):
     branch = _git(root, "symbolic-ref", "--short", "-q", "HEAD")
     where = f"{root.name}@{branch}" if branch else root.name
     plural = "file" if len(names) == 1 else "files"
+    details = f"Edited {len(names)} {plural} in {where} over {_duration(elapsed)}: {shown}"
 
     return Entry(
         timestamp=_now(),
         kind="nvim",
-        message=f"Edited {len(names)} {plural} in {where} over {_duration(elapsed)}: {shown}",
+        message=_with_summary(summary, details),
         topic=_topic(config.tickets, branch),
     )
 
 
-def nvim_entries(config, cwd, files, started):
+def _summary_entry(config, cwd, summary):
+    """Return the entry for a summary given with no files written."""
+    top = _git(cwd, "rev-parse", "--show-toplevel")
+    root = Path(top) if top else cwd.resolve()
+    branch = _git(root, "symbolic-ref", "--short", "-q", "HEAD")
+
+    return Entry(
+        timestamp=_now(),
+        kind="nvim",
+        message=f"{summary} (in {root.name})",
+        topic=_topic(config.tickets, branch),
+    )
+
+
+def nvim_entries(config, cwd, files, started, summary=None):
     """Return one entry per repository for the files a Neovim session wrote.
 
     Files inside the journal directory are skipped, so editing the journal does not
-    log itself.
+    log itself. A summary with no files left to log gives one entry for `cwd`.
 
     Args:
         config: Logbook configuration.
         cwd: Working directory of the session. Files outside any repository are
             grouped under it.
         files: Paths the session wrote.
-        started: When the session started.
+        started: When the session, or the span since the last entry, started.
+        summary: Text the user gave for the session. It leads each entry's message.
     """
     journal = config.journal.resolve()
     groups = {}
@@ -181,6 +204,9 @@ def nvim_entries(config, cwd, files, started):
 
         groups.setdefault(_repository_of(path, Path(cwd)), []).append(path)
 
+    if not groups and summary:
+        return [_summary_entry(config, Path(cwd), summary)]
+
     elapsed = datetime.now() - started
 
-    return [_nvim_entry(config, root, paths, elapsed) for root, paths in groups.items()]
+    return [_nvim_entry(config, root, paths, elapsed, summary) for root, paths in groups.items()]

@@ -253,6 +253,7 @@ def logbook_parse_args(argv=None):
 
     nvim.add_argument("--cwd", type=Path, required=True, help="Session working directory")
     nvim.add_argument("--started", type=_epoch, required=True, help="Session start, epoch seconds")
+    nvim.add_argument("--summary", help="Session summary, put before the list of files")
     nvim.add_argument("files", type=Path, nargs="*", help="Files written")
 
     return parser.parse_args(argv)
@@ -390,6 +391,8 @@ def logbook_main(argv=None):
 
         _append_all(config, [entry])
     else:
-        entries = capture.nvim_entries(config, arguments.cwd, arguments.files, arguments.started)
+        entries = capture.nvim_entries(
+            config, arguments.cwd, arguments.files, arguments.started, arguments.summary
+        )
 
         _append_all(config, entries)

@@ -236,6 +236,15 @@ class CaptureTest(unittest.TestCase):
         self.git("checkout", "-q", "main")
         self.assertIsNone(branch_entry(self.config, self.repo, True))
 
+    def test_nvim_summary_leads_the_message(self):
+        source = self.repo / "a.py"
+        source.write_text("")
+        entries = nvim_entries(self.config, self.repo, [source], started=datetime(2026, 1, 1), summary="Fixed it")
+        self.assertRegex(entries[0].message, r"^Fixed it \(Edited 1 file in widget@main over .*: a.py\)$")
+        only_summary = nvim_entries(self.config, self.repo, [], started=datetime(2026, 1, 1), summary="Planned")
+        self.assertEqual(only_summary[0].message, "Planned (in widget)")
+        self.assertEqual(nvim_entries(self.config, self.repo, [], started=datetime(2026, 1, 1)), [])
+
     def test_nvim_skips_journal_and_groups_by_repo(self):
         source = self.repo / "a.py"
         source.write_text("")

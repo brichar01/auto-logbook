@@ -72,7 +72,7 @@ todos.
 | `note` | `note`, `idea`, `decision`, `todo`, or `--kind` | as given |
 | commit | `commit` | `#project/topic` in the subject, else a ticket in the subject or branch |
 | new branch | `branch` | a ticket in the branch name |
-| Neovim exit | `nvim` | a ticket in the branch. Written only when the session saved a file outside the journal |
+| Neovim exit, `:Logbook` | `nvim` | a ticket in the branch |
 | Claude Code | `claude` and others | chosen by the `logbook-summary` skill |
 
 ## Adding entries
@@ -125,6 +125,21 @@ logbook tui
 `tab`. `/` filters, `u` shows only unassigned lines, `a` assigns the ticket on
 the line to a project, `d` unassigns it, `n` adds a project, `x` removes one and
 `enter` shows the entries of a ticket or project.
+
+## Neovim
+
+The plugin keeps the set of files saved since the last entry. Files in the
+journal are left out.
+
+- On exit, when files were saved, it asks `Enter session summary:`. The summary
+  leads the entry and the list of files follows it. Escape adds no entry. An
+  empty summary logs the files alone. With no UI, as in `nvim --headless`, it logs
+  the files without asking.
+- `:Logbook [summary]`, or `<Leader>nl`, adds an entry now and starts a new file
+  set. With no argument it asks for the summary. A summary with no files saved
+  is logged on its own.
+
+Set `vim.g.auto_logbook_disable = true` to turn it off.
 
 ## Claude Code
 
