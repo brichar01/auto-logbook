@@ -9,13 +9,14 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import date, datetime
 from pathlib import Path
+from unittest import mock
 
 from auto_logbook import cli, views
 from auto_logbook.capture import branch_entry, commit_entry, nvim_entries
 from auto_logbook.config import Config, Registry, edit_registry, load_config, load_registry
 from auto_logbook.entry import Entry, parse_day
 from auto_logbook.topics import TicketKey, TopicPath, parse_selector, ticket_pattern
-from auto_logbook.journal import append_entry, insert_into_section, read_entries
+from auto_logbook.journal import append_entry, insert_into_section, read_entries, set_frontmatter_field, wifi_ssid
 
 ANY_TICKET = ticket_pattern([])
 T = TopicPath.parse
@@ -97,16 +98,40 @@ class JournalTest(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         root = Path(self.directory.name)
         self.config = Config(journal=root / "Journal", state=root / "state.json")
+        patcher = mock.patch("auto_logbook.journal.wifi_ssid", return_value="Home: 5G")
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         self.directory.cleanup()
+
+    def test_new_day_file_without_template_gets_location(self):
+        path = append_entry(self.config, Entry(NOW, "note", "hi"))
+        append_entry(self.config, Entry(NOW, "note", "again"))
+        self.assertEqual(path.read_text(), '---\nlocation: "Home: 5G"\n---\n\n## Log\n- 2026-11-19 8:00:00 #note hi\n- 2026-11-19 8:00:00 #note again\n')
 
     def test_new_day_file_from_templater_template(self):
         template = Path(self.directory.name) / "daily.md"
         template.write_text("---\ndate: <% tp.date.now() %>\n---\n\n## Notes\n")
         self.config.template = template
         path = append_entry(self.config, Entry(datetime(2026, 11, 19, 8, 0, 0), "note", "hi"))
-        self.assertEqual(path.read_text(), "---\ndate: 2026-11-19\n---\n\n## Notes\n\n## Log\n- 2026-11-19 8:00:00 #note hi\n")
+        self.assertEqual(path.read_text(), "---\ndate: 2026-11-19\nlocation: \"Home: 5G\"\n---\n\n## Notes\n\n## Log\n- 2026-11-19 8:00:00 #note hi\n")
+
+    def test_set_frontmatter_field_replaces_existing_key(self):
+        self.assertEqual(set_frontmatter_field("---\nlocation: old\ntags: []\n---\nbody\n", "location", "new"),
+                         "---\ntags: []\nlocation: new\n---\nbody\n")
+
+    def test_wifi_ssid_unescapes_nmcli_output(self):
+        result = subprocess.CompletedProcess([], 0, stdout="no:Other\nyes:Cafe\\: Guest\n")
+        with mock.patch("auto_logbook.journal.subprocess.run", return_value=result):
+            self.assertEqual(wifi_ssid(), "Cafe: Guest")
+
+    def test_wifi_ssid_unknown_without_nmcli_or_connection(self):
+        with mock.patch("auto_logbook.journal.subprocess.run", side_effect=FileNotFoundError):
+            self.assertEqual(wifi_ssid(), "unknown")
+        disconnected = subprocess.CompletedProcess([], 0, stdout="no:Other\n")
+        with mock.patch("auto_logbook.journal.subprocess.run", return_value=disconnected):
+            self.assertEqual(wifi_ssid(), "unknown")
 
     def test_read_entries_recurses_and_sorts(self):
         archived = self.config.journal / "2026-10" / "2026-10-01.md"

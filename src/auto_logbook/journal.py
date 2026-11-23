@@ -1,7 +1,9 @@
 """Read and append entries in the day files of the journal directory."""
 
 import fcntl
+import json
 import re
+import subprocess
 from pathlib import Path
 
 from .entry import Entry
@@ -12,6 +14,9 @@ TEMPLATE_DATE_PATTERN = re.compile(
     r"<%\s*tp\.(?:date\.now\(\s*\)|file\.title)\s*%>"
     r"|\{\{(?:date|title)\}\}"
 )
+PLAIN_YAML_PATTERN = re.compile(r"[\w .-]+")
+NMCLI_TIMEOUT = 2
+UNKNOWN_LOCATION = "unknown"
 
 
 def day_path(journal, day):
@@ -32,6 +37,47 @@ def new_day_text(day, template):
         return ""
 
     return TEMPLATE_DATE_PATTERN.sub(day.isoformat(), Path(template).read_text())
+
+
+def wifi_ssid():
+    """Return the SSID of the active wifi connection, or `unknown` when there is none."""
+    try:
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "active,ssid", "device", "wifi"],
+            capture_output=True,
+            text=True,
+            timeout=NMCLI_TIMEOUT,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return UNKNOWN_LOCATION
+
+    for line in result.stdout.splitlines():
+        active, _, ssid = line.partition(":")
+
+        if active == "yes" and ssid:
+            # nmcli terse output escapes `:` and `\` with a backslash.
+            return re.sub(r"\\(.)", r"\1", ssid)
+
+    return UNKNOWN_LOCATION
+
+
+def set_frontmatter_field(text, key, value):
+    """Return `text` with `key: value` in its YAML frontmatter, adding frontmatter if it has none.
+
+    An existing `key` is replaced. A value that is not plain text is written quoted.
+    """
+    field = f"{key}: {value if PLAIN_YAML_PATTERN.fullmatch(value) else json.dumps(value)}"
+    lines = text.splitlines()
+
+    if lines and lines[0] == "---" and "---" in lines[1:]:
+        end = lines.index("---", 1)
+        body = [line for line in lines[1:end] if not line.startswith(f"{key}:")]
+        lines = ["---", *body, field, *lines[end:]]
+
+        return "\n".join(lines) + "\n"
+
+    return "\n".join(["---", field, "---", "", *lines]) + "\n"
 
 
 def _is_fence(line):
@@ -102,6 +148,8 @@ def insert_into_section(text, section, line):
 def append_entry(config, entry):
     """Add `entry` to its day file, creating the file from the template if needed.
 
+    A new day file gets the wifi SSID as `location` in its frontmatter.
+
     Returns:
         The day file written to.
     """
@@ -114,7 +162,11 @@ def append_entry(config, entry):
     with path.open("a+", encoding="utf-8") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
         handle.seek(0)
-        text = handle.read() or new_day_text(entry.timestamp.date(), config.template)
+        text = handle.read()
+
+        if not text:
+            text = new_day_text(entry.timestamp.date(), config.template)
+            text = set_frontmatter_field(text, "location", wifi_ssid())
 
         handle.truncate(0)
         handle.write(insert_into_section(text, config.section, entry.format()))
