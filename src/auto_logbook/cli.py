@@ -9,7 +9,9 @@ from . import capture, views
 from .config import ConfigError, edit_registry, load_config, load_registry
 from .entry import Entry, parse_day
 from .journal import append_entry
-from .topics import TicketKey, TopicPath, hashtag_topic, parse_selector
+from .topics import TicketKey, TopicPath, parse_selector, split_topic
+
+COMPLETION_SETS = ("projects", "tickets", "topics")
 
 
 def _day(text):
@@ -41,38 +43,6 @@ def _epoch(text):
 
 def _now():
     return datetime.now().replace(microsecond=0)
-
-
-def _is_topic_word(word, registry, pattern):
-    """Return whether a leading note word names a topic rather than starting the message."""
-    if any(character.isspace() for character in word):
-        return False
-
-    if word.startswith("#") or "/" in word:
-        return True
-
-    if pattern.fullmatch(word):
-        return True
-
-    return TopicPath.parse(word) in registry.projects
-
-
-def split_topic(words, registry, pattern):
-    """Split note words into a topic and a message.
-
-    The first word is a topic when more words follow and it is a `#tag`, holds a
-    `/`, is a ticket key or is a registered project. Otherwise the first
-    `#project/topic` tag in the message is the topic, and stays in the message.
-
-    Returns:
-        A `(topic, message)` tuple. The topic is None when none is found.
-    """
-    if len(words) > 1 and _is_topic_word(words[0], registry, pattern):
-        return TopicPath.parse(words[0]), " ".join(words[1:])
-
-    message = " ".join(words)
-
-    return hashtag_topic(message), message
 
 
 def _add_kind_flags(parser):
@@ -234,6 +204,14 @@ def logbook_parse_args(argv=None):
     unassign.add_argument("ticket", type=_ticket)
     commands.add_parser("tui", help="Browse entries, tickets and projects")
 
+    complete = commands.add_parser("complete", help="Print names for shell and Neovim completion")
+
+    complete.add_argument(
+        "names",
+        choices=COMPLETION_SETS,
+        help="Registered projects, known tickets, or topics, which are both",
+    )
+
     hook = commands.add_parser("capture", help="Record an event. Called by git hooks and Neovim")
     sources = hook.add_subparsers(dest="source", required=True)
     commit = sources.add_parser("commit", help="Record the commit at HEAD")
@@ -334,6 +312,22 @@ def unassign_ticket(config, ticket):
     print(f"{ticket} unassigned")
 
 
+def complete(config, names):
+    """Print the registered projects, known tickets, or both, one per line.
+
+    Args:
+        config: Logbook configuration.
+        names: One of `COMPLETION_SETS`. `topics` is the projects, then the tickets.
+    """
+    registry = load_registry(config.state)
+    projects = sorted(str(project) for project in registry.projects)
+    tickets = [str(ticket) for ticket in sorted(registry.tickets)]
+    candidates = {"projects": projects, "tickets": tickets, "topics": projects + tickets}
+
+    for name in candidates[names]:
+        print(name)
+
+
 def _append_all(config, entries):
     for entry in entries:
         if entry:
@@ -384,6 +378,8 @@ def logbook_main(argv=None):
         from .tui import run
 
         run(config)
+    elif command == "complete":
+        complete(config, arguments.names)
     elif arguments.source == "commit":
         _append_all(config, [capture.commit_entry(config, arguments.repo)])
     elif arguments.source == "checkout":

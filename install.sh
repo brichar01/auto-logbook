@@ -4,6 +4,7 @@ set -euo pipefail
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/auto-logbook"
 nvim_plugin_dir="${XDG_DATA_HOME:-$HOME/.local/share}/nvim/site/plugin"
+zsh_functions_dir="${XDG_DATA_HOME:-$HOME/.local/share}/zsh/site-functions"
 claude_skills_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills"
 
 journal=""
@@ -22,6 +23,7 @@ Installs:
   logbook
   git hooks               git config --global core.hooksPath $repo/hooks
   Neovim plugin           link in $nvim_plugin_dir
+  zsh completion          link in $zsh_functions_dir
   Claude Code skill       link in $claude_skills_dir
   configuration           $config_dir/config.toml, only when it does not exist
 
@@ -66,6 +68,7 @@ if [ "$uninstall" -eq 1 ]; then
         echo "Unset global core.hooksPath"
     fi
     remove_link "$nvim_plugin_dir/auto_logbook.lua"
+    remove_link "$zsh_functions_dir/_logbook"
     remove_link "$claude_skills_dir/logbook-summary"
     echo "Kept $config_dir and the journal."
     exit 0
@@ -111,9 +114,12 @@ uv tool install --force --editable "$repo"
 git config --global core.hooksPath "$repo/hooks"
 echo "Set global core.hooksPath to $repo/hooks"
 
-mkdir -p "$nvim_plugin_dir" "$claude_skills_dir"
+mkdir -p "$nvim_plugin_dir" "$zsh_functions_dir" "$claude_skills_dir"
 ln -sfn "$repo/nvim/auto_logbook.lua" "$nvim_plugin_dir/auto_logbook.lua"
 echo "Linked $nvim_plugin_dir/auto_logbook.lua"
+ln -sfn "$repo/zsh/_logbook" "$zsh_functions_dir/_logbook"
+echo "Linked $zsh_functions_dir/_logbook. Add it to fpath before compinit:"
+echo "  fpath=(\"$zsh_functions_dir\" \$fpath)"
 ln -sfn "$repo/claude/skills/logbook-summary" "$claude_skills_dir/logbook-summary"
 echo "Linked $claude_skills_dir/logbook-summary"
 

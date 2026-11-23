@@ -230,6 +230,16 @@ class CliTest(unittest.TestCase):
         self.assertEqual(json.loads(self.run_logbook("tickets", "--unassigned", "--json")), [])
 
 
+    def test_complete_lists_registry_names(self):
+        self.assertEqual(self.run_logbook("complete", "topics"), "")
+        self.run_logbook("assign", "AM-10", "aq1/logbook")
+        self.run_logbook("assign", "AM-9", "aq1/logbook")
+        self.run_logbook("project", "add", "aq1/am100")
+        self.assertEqual(self.run_logbook("complete", "projects").split(), ["aq1/am100", "aq1/logbook"])
+        self.assertEqual(self.run_logbook("complete", "tickets").split(), ["AM-9", "AM-10"])
+        self.assertEqual(self.run_logbook("complete", "topics").split(), ["aq1/am100", "aq1/logbook", "AM-9", "AM-10"])
+
+
 class CaptureTest(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
@@ -269,6 +279,17 @@ class CaptureTest(unittest.TestCase):
         only_summary = nvim_entries(self.config, self.repo, [], started=datetime(2026, 1, 1), summary="Planned")
         self.assertEqual(only_summary[0].message, "Planned (in widget)")
         self.assertEqual(nvim_entries(self.config, self.repo, [], started=datetime(2026, 1, 1)), [])
+
+    def test_nvim_summary_topic_reads_back(self):
+        source = self.repo / "a.py"
+        source.write_text("")
+        started = datetime(2026, 1, 1)
+        for files in ([source], []):
+            entry = nvim_entries(self.config, self.repo, files, started=started, summary="#NEP-377 Reviewed it")[0]
+            self.assertEqual(entry.topic, T("NEP-377"))
+            self.assertTrue(entry.message.startswith("Reviewed it ("))
+            parsed = Entry.parse(entry.format())
+            self.assertEqual((parsed.topic, parsed.kind), (T("NEP-377"), "nvim"))
 
     def test_nvim_skips_journal_and_groups_by_repo(self):
         source = self.repo / "a.py"

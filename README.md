@@ -21,6 +21,7 @@ The script:
   `uv tool install --editable`, so edits to this repository take effect at once,
 - sets the global `core.hooksPath` to `hooks/`,
 - links `nvim/auto_logbook.lua` into `~/.local/share/nvim/site/plugin/`,
+- links the zsh completion `zsh/_logbook` into `~/.local/share/zsh/site-functions/`,
 - links the `logbook-summary` skill into `~/.claude/skills/`,
 - writes `~/.config/auto-logbook/config.toml` when it does not exist.
 
@@ -93,6 +94,19 @@ The first word is the topic when more words follow and it is a `#tag`, holds a
 
 `log` is a zsh builtin, so the command is `note`.
 
+### Completion
+
+In zsh, Tab completes registered projects and known tickets: as a `#tag` for the
+first word of `note`, `idea` and `decision`, and as plain names for `--topic`,
+`logbook show`, `assign`, `unassign` and `project remove`. Put the directory the
+installer links into on `fpath` before `compinit` in `~/.zshrc`:
+
+```sh
+fpath=(~/.local/share/zsh/site-functions $fpath)
+```
+
+`logbook complete projects|tickets|topics` prints the names, one per line.
+
 ## Projects and tickets
 
 An entry belongs to the longest registered project its topic starts with. An
@@ -138,6 +152,8 @@ journal are left out.
 - `:Logbook [summary]`, or `<Leader>nl`, adds an entry now and starts a new file
   set. With no argument it asks for the summary. A summary with no files saved
   is logged on its own.
+- Tab completes the first word of the summary, at the prompt or after
+  `:Logbook`, as a `#tag` for a registered project or known ticket.
 
 Set `vim.g.auto_logbook_disable = true` to turn it off.
 

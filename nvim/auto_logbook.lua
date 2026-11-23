@@ -17,9 +17,43 @@ local function has_ui()
   return #vim.api.nvim_list_uis() > 0
 end
 
+-- Returns `#topic` tags for the projects and tickets that start with `lead`, with or without
+-- its `#`, when `before`, the text left of the cursor, is still the first word.
+local function complete_topic(lead, before)
+  if before:find("%s") or vim.fn.executable("logbook") ~= 1 then
+    return {}
+  end
+
+  local result = vim.system({ "logbook", "complete", "topics" }, { text = true }):wait()
+
+  if result.code ~= 0 then
+    return {}
+  end
+
+  local bare = lead:gsub("^#", "")
+  local tags = {}
+
+  for _, name in ipairs(vim.split(result.stdout, "\n", { trimempty = true })) do
+    if vim.startswith(name:lower(), bare:lower()) then
+      table.insert(tags, "#" .. name)
+    end
+  end
+
+  return tags
+end
+
+-- input() takes completion only by name, so this is global.
+function _G.auto_logbook_complete_summary(lead, line, position)
+  return complete_topic(lead, line:sub(1, position))
+end
+
 -- Returns the summary, "" for none, or nil when the user cancelled.
 local function ask_summary()
-  local ok, text = pcall(vim.fn.input, { prompt = PROMPT, cancelreturn = CANCELLED })
+  local ok, text = pcall(vim.fn.input, {
+    prompt = PROMPT,
+    cancelreturn = CANCELLED,
+    completion = "customlist,v:lua.auto_logbook_complete_summary",
+  })
 
   if not ok or text == CANCELLED then
     return nil
@@ -117,6 +151,14 @@ vim.api.nvim_create_user_command("Logbook", function(options)
       end)
     end
   end)
-end, { nargs = "*", desc = "Add a logbook entry for the files written since the last one" })
+end, {
+  nargs = "*",
+  desc = "Add a logbook entry for the files written since the last one",
+  complete = function(lead, line, position)
+    local arguments = line:sub(1, position):gsub("^%s*%S+%s*", "", 1)
+
+    return complete_topic(lead, arguments)
+  end,
+})
 
 vim.keymap.set("n", "<Leader>nl", "<cmd>Logbook<cr>", { desc = "Logbook: add a session entry" })

@@ -1,0 +1,103 @@
+#compdef logbook note idea decision
+
+# Called by _arguments, which puts its compadd options in "$@".
+_logbook_complete() {
+  local names=$1
+  shift
+  local -a candidates=(${(f)"$(_call_program $names logbook complete $names 2>/dev/null)"})
+
+  compadd "$@" -a candidates
+}
+
+_logbook_projects() { _logbook_complete projects "$@" }
+_logbook_tickets() { _logbook_complete tickets "$@" }
+_logbook_topics() { _logbook_complete topics "$@" }
+
+# A bare leading `#` is a bad pattern under extendedglob, so the tag goes in escaped.
+_logbook_tags() { _logbook_complete topics -Q -P '\#' "$@" }
+
+_logbook_days() {
+  _values day today tomorrow mon tue wed thu fri sat sun
+}
+
+_logbook_note() {
+  local -a specs=(
+    '(-h --help)'{-h,--help}'[show help]'
+    '(-t --topic)'{-t,--topic}'[topic, such as project/topic or a ticket key]:topic:_logbook_topics'
+    '--config[configuration file]:file:_files'
+    '1:topic or message:_logbook_tags'
+    '*:message: '
+  )
+
+  if [[ $service == note ]]; then
+    local kinds='(--idea --decision --todo --kind)'
+
+    specs+=(
+      "$kinds--idea[tag as #idea]"
+      "$kinds--decision[tag as #decision]"
+      "$kinds--todo[tag as #todo]"
+      "$kinds--kind[tag with any other kind]:kind: "
+      '--due[due date of a todo]:day:_logbook_days'
+    )
+  fi
+
+  _arguments -s $specs
+}
+
+_logbook_command() {
+  local -a commands=(
+    'show:print entries, grouped by day'
+    'projects:list projects and unregistered topics'
+    'project:add or remove a project'
+    'tickets:list tickets and their projects'
+    'assign:map a ticket to a project'
+    'unassign:remove the project of a ticket'
+    'tui:browse entries, tickets and projects'
+  )
+
+  _describe -t commands command commands
+}
+
+_logbook_main() {
+  local curcontext=$curcontext state line
+  local output=('--json[print JSON]' '--no-colour[do not colour the output]')
+
+  _arguments -C \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '--config[configuration file]:file:_files' \
+    '1:command:_logbook_command' \
+    '*::argument:->argument'
+
+  [[ $state == argument ]] || return
+
+  case $words[1] in
+    show)
+      _arguments \
+        '1:project, topic or ticket:_logbook_topics' \
+        '*'{-k,--kind}'[kind to show]:kind:(note idea decision todo commit branch nvim claude)' \
+        '--since[first day]:day:_logbook_days' \
+        '--until[last day]:day:_logbook_days' \
+        '--open[only unticked tasks]' \
+        '--unassigned[only entries with no project]' \
+        '(-n --limit)'{-n,--limit}'[only the newest N entries]:count: ' \
+        $output
+      ;;
+    projects) _arguments $output ;;
+    tickets) _arguments '--unassigned[only tickets with no project]' $output ;;
+    project)
+      local remove=' '
+
+      [[ $words[2] == remove ]] && remove=_logbook_projects
+      _arguments \
+        '1:action:((add\:"register a project" remove\:"unregister a project"))' \
+        "2:project:$remove"
+      ;;
+    assign) _arguments '1:ticket:_logbook_tickets' '2:project:_logbook_projects' ;;
+    unassign) _arguments '1:ticket:_logbook_tickets' ;;
+  esac
+}
+
+case $service in
+  logbook) _logbook_main "$@" ;;
+  *) _logbook_note "$@" ;;
+esac

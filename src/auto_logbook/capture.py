@@ -5,8 +5,9 @@ import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from .config import load_registry
 from .entry import Entry
-from .topics import TicketKey, hashtag_topic
+from .topics import TicketKey, hashtag_topic, split_topic
 
 #: A branch whose newest reflog record is a creation this recent is new, not revisited.
 NEW_BRANCH_AGE = timedelta(seconds=30)
@@ -145,7 +146,7 @@ def _with_summary(summary, details):
     return details
 
 
-def _nvim_entry(config, root, paths, elapsed, summary):
+def _nvim_entry(config, root, paths, elapsed, summary, summary_topic):
     names = sorted({_display_name(path, root) for path in paths})
     shown = ", ".join(names[:NVIM_FILES_SHOWN])
 
@@ -161,11 +162,11 @@ def _nvim_entry(config, root, paths, elapsed, summary):
         timestamp=_now(),
         kind="nvim",
         message=_with_summary(summary, details),
-        topic=_topic(config.tickets, branch),
+        topic=summary_topic or _topic(config.tickets, branch),
     )
 
 
-def _summary_entry(config, cwd, summary):
+def _summary_entry(config, cwd, summary, summary_topic):
     """Return the entry for a summary given with no files written."""
     top = _git(cwd, "rev-parse", "--show-toplevel")
     root = Path(top) if top else cwd.resolve()
@@ -175,7 +176,7 @@ def _summary_entry(config, cwd, summary):
         timestamp=_now(),
         kind="nvim",
         message=f"{summary} (in {root.name})",
-        topic=_topic(config.tickets, branch),
+        topic=summary_topic or _topic(config.tickets, branch),
     )
 
 
@@ -192,6 +193,8 @@ def nvim_entries(config, cwd, files, started, summary=None):
         files: Paths the session wrote.
         started: When the session, or the span since the last entry, started.
         summary: Text the user gave for the session. It leads each entry's message.
+            A leading topic, as `note` takes one, is the entries' topic in place of
+            the branch's ticket.
     """
     journal = config.journal.resolve()
     groups = {}
@@ -204,9 +207,18 @@ def nvim_entries(config, cwd, files, started, summary=None):
 
         groups.setdefault(_repository_of(path, Path(cwd)), []).append(path)
 
+    summary_topic = None
+
+    if summary:
+        registry = load_registry(config.state)
+        summary_topic, summary = split_topic(summary.split(), registry, config.tickets)
+
     if not groups and summary:
-        return [_summary_entry(config, Path(cwd), summary)]
+        return [_summary_entry(config, Path(cwd), summary, summary_topic)]
 
     elapsed = datetime.now() - started
 
-    return [_nvim_entry(config, root, paths, elapsed, summary) for root, paths in groups.items()]
+    return [
+        _nvim_entry(config, root, paths, elapsed, summary, summary_topic)
+        for root, paths in groups.items()
+    ]

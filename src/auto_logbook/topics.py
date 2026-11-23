@@ -129,3 +129,35 @@ def parse_selector(text, pattern):
         return TicketKey.parse(text)
 
     return TopicPath.parse(text)
+
+
+def _is_topic_word(word, registry, pattern):
+    """Return whether a leading note word names a topic rather than starting the message."""
+    if any(character.isspace() for character in word):
+        return False
+
+    if word.startswith("#") or "/" in word:
+        return True
+
+    if pattern.fullmatch(word):
+        return True
+
+    return TopicPath.parse(word) in registry.projects
+
+
+def split_topic(words, registry, pattern):
+    """Split note words into a topic and a message.
+
+    The first word is a topic when more words follow and it is a `#tag`, holds a
+    `/`, is a ticket key or is a registered project. Otherwise the first
+    `#project/topic` tag in the message is the topic, and stays in the message.
+
+    Returns:
+        A `(topic, message)` tuple. The topic is None when none is found.
+    """
+    if len(words) > 1 and _is_topic_word(words[0], registry, pattern):
+        return TopicPath.parse(words[0]), " ".join(words[1:])
+
+    message = " ".join(words)
+
+    return hashtag_topic(message), message
