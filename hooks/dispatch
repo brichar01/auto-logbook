@@ -1,0 +1,48 @@
+#!/bin/sh
+# core.hooksPath stops git running .git/hooks, so the repository's own hook runs first.
+
+hook=$(basename "$0")
+here=$(cd "$(dirname "$0")" && pwd -P)
+common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+local_hook="$common/hooks/$hook"
+status=0
+
+run_local=0
+if [ -n "$common" ] && [ -x "$local_hook" ]; then
+    if [ "$(cd "$common/hooks" && pwd -P)" != "$here" ]; then
+        run_local=1
+    fi
+fi
+
+case "$hook" in
+    post-commit | post-checkout)
+        if [ "$run_local" -eq 1 ]; then
+            "$local_hook" "$@" || status=$?
+        fi
+        ;;
+    *)
+        if [ "$run_local" -eq 1 ]; then
+            exec "$local_hook" "$@"
+        fi
+
+        exit 0
+        ;;
+esac
+
+if [ -n "$LOGBOOK_DISABLE" ]; then
+    exit "$status"
+fi
+
+logbook=$(command -v logbook || echo "${XDG_BIN_HOME:-$HOME/.local/bin}/logbook")
+
+if [ ! -x "$logbook" ]; then
+    exit "$status"
+fi
+
+if [ "$hook" = post-commit ]; then
+    "$logbook" capture commit --repo . >/dev/null 2>&1
+else
+    "$logbook" capture checkout --repo . "$3" >/dev/null 2>&1
+fi
+
+exit "$status"

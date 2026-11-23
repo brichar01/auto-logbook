@@ -1,0 +1,20 @@
+[project]
+name = "auto-logbook"
+version = "0.1.0"
+description = "Collect progress logs from git, Neovim, Claude Code and the command line into a daily journal"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+note = "auto_logbook.cli:note_main"
+idea = "auto_logbook.cli:idea_main"
+decision = "auto_logbook.cli:decision_main"
+logbook = "auto_logbook.cli:logbook_main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/auto_logbook"]
