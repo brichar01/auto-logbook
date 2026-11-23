@@ -71,6 +71,12 @@ class EntryTest(unittest.TestCase):
     def test_ticket_keys_restrict_matches(self):
         self.assertEqual(TicketKey.find_all("UTF-8 and AM-3 and SE-4 AM-3", ticket_pattern(["AM"])), [K("AM-3")])
 
+    def test_configured_ticket_keys_ignore_case(self):
+        pattern = ticket_pattern(["AM"])
+        self.assertEqual(TicketKey.find_all("am-3-fix and Am-4 and AM-3", pattern), [K("AM-3"), K("AM-4")])
+        self.assertEqual(TicketKey.find_all("utf-8", ANY_TICKET), [])
+        self.assertEqual(cli.split_topic(["am-12", "done"], Registry(), pattern), (T("AM-12"), "done"))
+
     def test_ticket_key_and_selector(self):
         self.assertEqual(str(K("am-012")), "AM-12")
         with self.assertRaises(ValueError):

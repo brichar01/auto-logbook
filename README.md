@@ -52,7 +52,7 @@ Set `LOGBOOK_DISABLE=1` to stop the hooks recording.
 | `journal` | none, required | Directory of `YYYY-MM-DD.md` day files. Subdirectories are read too. `$LOGBOOK_JOURNAL` overrides it. |
 | `section` | `Log` | Level-two heading new entries go under. It is added to the day file when missing. |
 | `template` | none | File a new day file starts from. Templater `tp.date.now()` and `tp.file.title`, and `{{date}}`, become the date. A new day file also gets `location` in its frontmatter, the wifi SSID from `nmcli` or `unknown`. |
-| `ticket_keys` | any | Jira project keys that count as tickets. With none, `UTF-8` is a ticket too. |
+| `ticket_keys` | any | Jira project keys that count as tickets, in any case, so `am-123` is `AM-123`. With none, only upper-case keys match, and `UTF-8` is a ticket too. |
 | `state` | `~/.local/share/auto-logbook/state.json` | Registered projects and the ticket to project mapping. |
 
 ## The log

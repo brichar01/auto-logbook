@@ -11,12 +11,16 @@ def ticket_pattern(keys):
     """Return the pattern that finds ticket keys such as `AM-123`.
 
     Args:
-        keys: Jira project keys to accept. Empty accepts any upper-case key, which
-            also matches strings such as `UTF-8`.
+        keys: Jira project keys to accept, in any case, so `am-123` matches too.
+            Empty accepts any upper-case key, which also matches strings such as
+            `UTF-8`.
     """
-    prefix = "|".join(re.escape(key) for key in keys) if keys else r"[A-Z][A-Z0-9]+"
+    if not keys:
+        return re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
 
-    return re.compile(rf"\b(?:{prefix})-\d+\b")
+    prefix = "|".join(re.escape(key) for key in keys)
+
+    return re.compile(rf"\b(?:{prefix})-\d+\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True, order=True)
@@ -155,6 +159,9 @@ def split_topic(words, registry, pattern):
     Returns:
         A `(topic, message)` tuple. The topic is None when none is found.
     """
+    if len(words) > 1 and pattern.fullmatch(words[0]):
+        return TicketKey.parse(words[0]).as_topic(), " ".join(words[1:])
+
     if len(words) > 1 and _is_topic_word(words[0], registry, pattern):
         return TopicPath.parse(words[0]), " ".join(words[1:])
 
